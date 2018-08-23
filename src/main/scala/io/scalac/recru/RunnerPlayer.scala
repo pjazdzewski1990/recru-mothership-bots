@@ -17,9 +17,9 @@ import scala.util.{Try, Failure => TryFailure, Success => TrySuccess}
 import scala.util.control.NonFatal
 
 object RunnerPlayer {
-  def props(usedName: String, client: HttpComms)
+  def props(usedName: String, kafkaAddress: String, client: HttpComms)
            (implicit mat: Materializer): Props =
-    Props(new RunnerPlayer(usedName, client)(mat))
+    Props(new RunnerPlayer(usedName, kafkaAddress, client)(mat))
 }
 
 object RunnerPlayerInternal {
@@ -36,7 +36,7 @@ object RunnerPlayerInternal {
 }
 
 //a simple player behaviour where it takes his color and always goes forward
-class RunnerPlayer(usedName: String, client: HttpComms)
+class RunnerPlayer(usedName: String, kafkaAddress: String, client: HttpComms)
                   (implicit mat: Materializer) extends Actor with ActorLogging {
   import RunnerPlayerInternal._
 
@@ -45,7 +45,7 @@ class RunnerPlayer(usedName: String, client: HttpComms)
   val rawConfig = ConfigFactory.load().getConfig("akka.kafka.consumer")
   val consumerSettings =
     ConsumerSettings(rawConfig, new StringDeserializer, new StringDeserializer)
-      .withBootstrapServers("docker.for.mac.host.internal:29092")
+      .withBootstrapServers(kafkaAddress)
       .withGroupId(self.path.toString)
       .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       .withProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
