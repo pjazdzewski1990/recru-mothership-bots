@@ -16,6 +16,7 @@ lazy val root = (project in file(".")).
       "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpV,
       "com.typesafe.akka" %% "akka-stream-kafka" % "0.22",
       "com.typesafe.play" %% "play-ahc-ws-standalone" % "2.0.0-M2",
+      "com.typesafe"      %  "config" % "1.3.2",
       scalaTest % Test
     )
   )
@@ -26,5 +27,9 @@ mainClass in Compile := Some("io.scalac.recru.BotsApp")
 enablePlugins(JavaAppPackaging)
 enablePlugins(DockerPlugin)
 enablePlugins(AshScriptPlugin)
+
+dockerEnvVars := Map(
+  "KAFKA" -> "<insert value here using docker compose overwrites>",
+  "API" -> "<insert value here using docker compose overwrites>")
 
 dockerBaseImage := "openjdk:jre-alpine"
