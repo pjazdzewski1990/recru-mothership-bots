@@ -2,6 +2,7 @@ package io.scalac.recru
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
+import io.scalac.recru.bots.WalkerBot
 
 object BotsApp extends App {
   println("Starting bots!")
@@ -16,6 +17,6 @@ object BotsApp extends App {
   println(s"Running bots with API: ${api} and Kafka: ${kafkaBootstrapServer}")
 
   val client = new PlayHttpComms(api)
-  system.actorOf(RunnerPlayer.props("bob", kafkaBootstrapServer, client))
-  system.actorOf(RunnerPlayer.props("joe", kafkaBootstrapServer, client))
+  system.actorOf(WalkerBot.props("alice", kafkaBootstrapServer, client))
+  system.actorOf(WalkerBot.props("bob", kafkaBootstrapServer, client))
 }

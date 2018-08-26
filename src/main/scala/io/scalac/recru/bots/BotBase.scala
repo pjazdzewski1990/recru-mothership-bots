@@ -1,28 +1,23 @@
-package io.scalac.recru
+package io.scalac.recru.bots
 
 import akka.actor.{Actor, ActorLogging, Props}
-import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.scaladsl.Consumer.Control
+import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.ConfigFactory
+import io.scalac.recru._
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
 import spray.json.{JsArray, JsObject, JsString, JsValue, JsonParser}
 
 import scala.concurrent.duration._
-import scala.util.{Try, Failure => TryFailure, Success => TrySuccess}
 import scala.util.control.NonFatal
+import scala.util.{Try, Failure => TryFailure, Success => TrySuccess}
 
-object RunnerPlayer {
-  def props(usedName: String, kafkaAddress: String, client: HttpComms)
-           (implicit mat: Materializer): Props =
-    Props(new RunnerPlayer(usedName, kafkaAddress, client)(mat))
-}
-
-object RunnerPlayerInternal {
+object BotBaseInternal {
   case object ConnectToGame
   case class ListenForGameEvents(game: GameId, color: Color.Value, listenOn: String)
 
@@ -35,10 +30,9 @@ object RunnerPlayerInternal {
   case class GameDidEnd(winners: Seq[String]) extends Observation
 }
 
-//a simple player behaviour where it takes his color and always goes forward
-class RunnerPlayer(usedName: String, kafkaAddress: String, client: HttpComms)
-                  (implicit mat: Materializer) extends Actor with ActorLogging {
-  import RunnerPlayerInternal._
+abstract class BotBase(kafkaAddress: String)
+               (implicit mat: Materializer) extends Actor with ActorLogging {
+  import BotBaseInternal._
 
   implicit val ec = context.dispatcher
 
@@ -51,58 +45,14 @@ class RunnerPlayer(usedName: String, kafkaAddress: String, client: HttpComms)
       .withProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
       .withProperty(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "5000")
 
-  scheduleGameStart()
 
-  private def scheduleGameStart() = {
+  def scheduleGameStart() = {
     context.system.scheduler.scheduleOnce(1.second) {
       self ! ConnectToGame
     }
   }
 
-  def playingGameReceive(gameId: GameId, color: Color.Value, currentListener: Control): Receive = {
-
-    case NewTurnStarted(playerStartingTheTurn) if playerStartingTheTurn == usedName =>
-      log.info("Player {} is doing his turn", usedName)
-      client.sendMove(playerName = usedName, gameId = gameId, color, move = 1).map(_ => log.debug("Move was sent"))
-
-    case GameDidEnd(winners) =>
-      if(winners.contains(usedName)) {
-        log.info("We did win {}", winners)
-      } else {
-        log.info("We didn't win {}" , winners)
-      }
-      scheduleGameStart()
-      context.become(waitingForGameReceive())
-
-    case _: GameStarted | _: NewTurnStarted | _: GameUpdated =>
-    // do nothing
-
-    case InvalidEvent =>
-    // do nothing
-  }
-
-  def waitingForGameReceive(): Receive = {
-    case ConnectToGame =>
-      log.info("Connecting to the game!")
-      client
-        .connect(usedName)
-        .map(g => self ! ListenForGameEvents(g.game, g.color, g.listenOn))
-        .recover {
-          case NonFatal(ex) =>
-            log.error(ex,"Failed joining with {}", ex.getMessage)
-            context.system.scheduler.scheduleOnce(10.second)(self ! ConnectToGame) // retry in a moment
-        }
-
-    case ListenForGameEvents(game, color, listenOn) =>
-      log.info("{} Connected to {}, listening on {}", usedName, game, listenOn)
-      val listenerControl: Control = buildListener(listenOn, game)
-      val newState = playingGameReceive(game, color, listenerControl)
-      context.become(newState)
-  }
-
-  override def receive: Receive = waitingForGameReceive()
-
-  private def buildListener(listenOn: String, listenForGame: GameId) = {
+  def buildListener(listenOn: String, listenForGame: GameId) = {
     val parentActor = self
 
     val (consumerControl, _) =
@@ -122,7 +72,7 @@ class RunnerPlayer(usedName: String, kafkaAddress: String, client: HttpComms)
     consumerControl
   }
 
-  def parseForProcessing(rawKafkaValue: String, listenForGame: GameId): Observation = {
+  private def parseForProcessing(rawKafkaValue: String, listenForGame: GameId): Observation = {
     val updateT = Try{ JsonParser(rawKafkaValue).asJsObject }
     //    log.info(s"Observed ${updateT} on Kafka")
 
@@ -152,11 +102,11 @@ class RunnerPlayer(usedName: String, kafkaAddress: String, client: HttpComms)
   }
 
   //TODO: dude, you really need to wrap those types
-  def parseGameId(fields: Map[String, JsValue]): Option[GameId] = {
+  private def parseGameId(fields: Map[String, JsValue]): Option[GameId] = {
     fields.get("gameId").map(jsStringToString).map(GameId)
   }
 
-  def parseFields(fields: Map[String, JsValue]): Observation = {
+  private def parseFields(fields: Map[String, JsValue]): Observation = {
     fields.get("type") match {
       case Some(JsString("game-start")) =>
         GameStarted()
