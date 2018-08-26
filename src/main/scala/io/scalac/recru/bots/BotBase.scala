@@ -7,11 +7,12 @@ import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.ConfigFactory
+import io.scalac.recru.Color.Color
 import io.scalac.recru._
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
-import spray.json.{JsArray, JsObject, JsString, JsValue, JsonParser}
+import spray.json.{JsArray, JsNumber, JsObject, JsString, JsValue, JsonParser}
 
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
@@ -26,7 +27,7 @@ object BotBaseInternal {
   case object ForeignEvent extends Observation // an event from tha game that is not ours
   case class GameStarted() extends Observation
   case class NewTurnStarted(name: String) extends Observation
-  case class GameUpdated() extends Observation
+  case class GameUpdated(player: String, color: Color, move: Int) extends Observation
   case class GameDidEnd(winners: Seq[String]) extends Observation
 }
 
@@ -114,7 +115,17 @@ abstract class BotBase(kafkaAddress: String)
         val player = fields.get("player").map(jsStringToString).getOrElse("")
         NewTurnStarted(player)
       case Some(JsString("game-update")) =>
-        GameUpdated()
+        //NOTE: this will crash if for some reason the data is not properly formatted
+        val playerMoving = fields.get("player").map{
+          case JsString(str) => str
+        }.get
+        val colorMoving = fields.get("color").flatMap{
+          case JsString(str) => Color.withNameOpt(str)
+        }.get
+        val move = fields.get("move").map{
+          case JsNumber(str) => str
+        }.get.toInt
+        GameUpdated(playerMoving, colorMoving, move)
       case Some(JsString("game-end")) =>
         val winners: Seq[String] = fields
           .get("winners")

@@ -2,7 +2,7 @@ package io.scalac.recru
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
-import io.scalac.recru.bots.{UnpredictableBot, WalkerBot}
+import io.scalac.recru.bots.{NaughtyBot, UnpredictableBot, WalkerBot}
 
 import scala.util.Random
 
@@ -19,10 +19,12 @@ object BotsApp extends App {
   println(s"Running bots with API: ${api} and Kafka: ${kafkaBootstrapServer}")
 
   val client = new PlayHttpComms(api)
-  system.actorOf(WalkerBot.props("alice", kafkaBootstrapServer, client))
-  system.actorOf(WalkerBot.props("bob", kafkaBootstrapServer, client))
-
   val r = new Random()
-  system.actorOf(UnpredictableBot.props("celine", kafkaBootstrapServer, client, r))
-  system.actorOf(UnpredictableBot.props("dexter", kafkaBootstrapServer, client, r))
+
+  system.actorOf(UnpredictableBot.props("alice", kafkaBootstrapServer, client, r))
+  system.actorOf(UnpredictableBot.props("bob", kafkaBootstrapServer, client, r))
+
+  system.actorOf(WalkerBot.props("celine", kafkaBootstrapServer, client))
+
+  system.actorOf(NaughtyBot.props("dexter", kafkaBootstrapServer, client))
 }
