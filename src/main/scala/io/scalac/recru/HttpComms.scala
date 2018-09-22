@@ -1,11 +1,13 @@
 package io.scalac.recru
 
 import akka.NotUsed
+import com.typesafe.scalalogging.Logger
 import akka.stream.Materializer
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import spray.json.{JsNumber, JsObject, JsString, JsonParser}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
 
 object HttpComms {
   case class ConnectedToGame(game: GameId, color: Color.Value, listenOn: String)
@@ -23,6 +25,8 @@ class PlayHttpComms(baseUrl: String)
   import play.api.libs.ws.DefaultBodyWritables._
 
   val wsClient = StandaloneAhcWSClient()
+
+  val log = Logger(classOf[PlayHttpComms])
 
   override def connect(nameToUse: String): Future[HttpComms.ConnectedToGame] = {
     val url = baseUrl + "game/"
@@ -62,6 +66,15 @@ class PlayHttpComms(baseUrl: String)
       "move" -> JsNumber(move)
     ).prettyPrint
 
-    wsClient.url(url).addHttpHeaders("Content-Type" -> "application/json").post(b).filter(_.status == 200).map(_ => NotUsed)
+    val post = wsClient.url(url)
+      .addHttpHeaders("Content-Type" -> "application/json")
+      .put(b)
+      .filter(_.status == 200)
+      .map(_ => NotUsed)
+    post.recover {
+      case NonFatal(err) =>
+        log.error(s"Was not able to send the move ${err.getMessage}", err)
+    }
+    post
   }
 }

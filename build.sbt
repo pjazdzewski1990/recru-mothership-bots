@@ -8,7 +8,7 @@ lazy val root = (project in file(".")).
     inThisBuild(List(
       organization := "io.scalac",
       scalaVersion := "2.12.6",
-      version      := "0.1.0-SNAPSHOT"
+      version      := "0.2.0-SNAPSHOT"
     )),
     name := "mothership-bots",
     libraryDependencies ++= Seq(
@@ -17,6 +17,8 @@ lazy val root = (project in file(".")).
       "com.typesafe.akka" %% "akka-stream-kafka" % "0.22",
       "com.typesafe.play" %% "play-ahc-ws-standalone" % "2.0.0-M2",
       "com.typesafe"      %  "config" % "1.3.2",
+      "ch.qos.logback"    % "logback-classic" % "1.2.3",
+      "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
       scalaTest % Test
     )
   )
